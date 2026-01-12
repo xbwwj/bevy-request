@@ -1,0 +1,11 @@
+[package]
+name = "bevy-request"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-compat = "0.2.5"
+bevy = { version = "0.17.3", default-features = false }
+blocking = "1.6.2"
+reqwest = "0.13.1"
+ureq = "3.1.4"
