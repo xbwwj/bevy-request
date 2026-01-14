@@ -5,29 +5,26 @@ Bevy native http client.
 This library is still in its early stage.
 
 ```rust
-commands
-    .spawn((GET, uri))
-    .observe(
-        |mut response: On<Response>, mut app_exit: MessageWriter<AppExit>| match &mut response
-            .result
-        {
-            Ok(response) => {
-                println!("{}", response.status());
-                // TODO: read_to_string should be background
-                let text = response.body_mut().read_to_string().unwrap_or_default();
-                println!("text: {}", text);
+fn get_example_com(mut commands: Commands) {
+    commands
+        // spawn a request
+        .spawn((GET, Uri("https://example.com".to_string())))
+        // handle complete event
+        .observe(
+            |response: On<RequestComplete>| {
+                match &response.result() {
+                    Ok(response) => {
+                        println!("status: {}", response.status());
+                        println!("text: {}", response.body());
+                    }
+                    Err(error) => {
+                        eprintln!("{:?}", error);
+                    }
+                }
+            },
+        );
+}
 
-                // successfully exit
-                app_exit.write(AppExit::Success);
-            }
-            Err(error) => {
-                eprintln!("{:?}", error);
-
-                // exit with error
-                app_exit.write(AppExit::error());
-            }
-        },
-    );
 ```
 
 ## HTTP Backend
