@@ -162,16 +162,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy-request"
-version = "0.1.0"
-dependencies = [
- "async-compat",
- "bevy",
- "crossbeam-channel",
- "reqwest",
-]
-
-[[package]]
 name = "bevy_android"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -423,6 +413,16 @@ dependencies = [
  "quote",
  "syn",
  "uuid",
+]
+
+[[package]]
+name = "bevy_request"
+version = "0.1.0"
+dependencies = [
+ "async-compat",
+ "bevy",
+ "crossbeam-channel",
+ "reqwest",
 ]
 
 [[package]]
