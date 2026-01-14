@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::inner::{Rx, Tx, request_poll, request_start};
+use crate::inner::{make_channel, request_poll, request_start};
 
 mod headers;
 mod inner;
@@ -10,10 +10,10 @@ pub struct RequestPlugin;
 
 impl Plugin for RequestPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        let (tx, rx) = crossbeam_channel::unbounded();
+        let (tx, rx) = make_channel();
 
-        app.insert_resource(Rx(rx))
-            .insert_resource(Tx(tx))
+        app.insert_resource(tx)
+            .insert_resource(rx)
             .add_observer(request_start)
             .add_systems(Update, request_poll);
     }

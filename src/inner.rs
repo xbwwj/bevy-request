@@ -6,16 +6,24 @@ use bevy::{prelude::*, tasks::IoTaskPool};
 use crate::{
     headers::Headers,
     interface::{Method, RequestComplete, Response, Uri},
+    prelude::ResponseReceived,
 };
 
-/// Abbreviation for channel message type.
-pub(crate) type ERR = (Entity, reqwest::Result<Response>);
+enum RequestEvent {
+    Received(ResponseReceived),
+    Complete(RequestComplete),
+}
 
 #[derive(Resource, Debug)]
-pub(crate) struct Tx(pub(crate) crossbeam_channel::Sender<ERR>);
+pub(crate) struct Tx(crossbeam_channel::Sender<RequestEvent>);
 
 #[derive(Resource, Debug)]
-pub(crate) struct Rx(pub(crate) crossbeam_channel::Receiver<ERR>);
+pub(crate) struct Rx(crossbeam_channel::Receiver<RequestEvent>);
+
+pub(crate) fn make_channel() -> (Tx, Rx) {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    (Tx(tx), Rx(rx))
+}
 
 pub(crate) fn request_start(
     event: On<Add, Method>,
@@ -46,11 +54,37 @@ pub(crate) fn request_start(
                     request = request.headers(headers.0);
                 }
 
-                let response = request.send().await;
-                let response = Response::from_reqwest(response).await;
-                tx.send((request_entity, response))
-                    // TODO: better error handling for
-                    .expect("fail to send");
+                let response = match request.send().await {
+                    Ok(response) => response,
+                    Err(err) => {
+                        tx.send(RequestEvent::Received(ResponseReceived {
+                            entity: request_entity,
+                            result: Err(err),
+                        }))
+                        .expect("fail to send");
+                        return;
+                    }
+                };
+                let status = response.status().as_u16();
+                tx.send(RequestEvent::Received(ResponseReceived {
+                    entity: request_entity,
+                    result: Ok(status),
+                }))
+                .expect("fail to send");
+
+                let text = response.text().await;
+                match text {
+                    Ok(text) => tx.send(RequestEvent::Complete(RequestComplete {
+                        entity: request_entity,
+                        result: Ok(Response { status, body: text }),
+                    })),
+                    Err(err) => tx.send(RequestEvent::Complete(RequestComplete {
+                        entity: request_entity,
+                        result: Err(err),
+                    })),
+                }
+                // TODO: better error handling for
+                .expect("fail to send");
             }
             .compat()
         })
@@ -58,7 +92,10 @@ pub(crate) fn request_start(
 }
 
 pub(crate) fn request_poll(rx: ResMut<Rx>, mut commands: Commands) {
-    while let Ok((entity, result)) = rx.0.try_recv() {
-        commands.trigger(RequestComplete { entity, result });
+    while let Ok(event) = rx.0.try_recv() {
+        match event {
+            RequestEvent::Received(event) => commands.trigger(event),
+            RequestEvent::Complete(event) => commands.trigger(event),
+        }
     }
 }

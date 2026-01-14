@@ -4,20 +4,11 @@ pub use crate::headers::*;
 
 #[derive(Clone, Debug)]
 pub struct Response {
-    status: u16,
-    body: String,
+    pub status: u16,
+    pub body: String,
 }
 
 impl Response {
-    pub(crate) async fn from_reqwest(
-        response: reqwest::Result<reqwest::Response>,
-    ) -> reqwest::Result<Self> {
-        let response = response?;
-        let status = response.status().as_u16();
-        let body = response.text().await?;
-        Ok(Self { status, body })
-    }
-
     pub fn status(&self) -> u16 {
         self.status
     }
@@ -47,12 +38,18 @@ pub struct Uri(pub String);
 
 #[derive(EntityEvent, Debug)]
 pub struct RequestComplete {
-    pub(crate) entity: Entity,
-    pub(crate) result: reqwest::Result<Response>,
+    pub entity: Entity,
+    pub result: reqwest::Result<Response>,
 }
 
 impl RequestComplete {
     pub fn result(&self) -> &reqwest::Result<Response> {
         &self.result
     }
+}
+
+#[derive(EntityEvent, Debug)]
+pub struct ResponseReceived {
+    pub entity: Entity,
+    pub result: reqwest::Result<u16>,
 }

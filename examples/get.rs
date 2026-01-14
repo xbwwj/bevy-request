@@ -13,6 +13,16 @@ fn get_example_com(mut commands: Commands) {
     commands
         // spawn a request
         .spawn((GET, Uri("https://example.com".to_string())))
+        .observe(|received: On<ResponseReceived>| {
+            match &received.result {
+                Ok(status) => {
+                    println!("status: {}", status);
+                }
+                Err(err) => {
+                    println!("error: {:?}", err);
+                }
+            };
+        })
         // handle complete event
         .observe(
             |response: On<RequestComplete>, mut app_exit: MessageWriter<AppExit>| {
@@ -22,7 +32,7 @@ fn get_example_com(mut commands: Commands) {
                         println!("text: {}", response.body());
                     }
                     Err(error) => {
-                        eprintln!("{:?}", error);
+                        eprintln!("error: {:?}", error);
                     }
                 }
 
