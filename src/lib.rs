@@ -22,7 +22,7 @@ struct Tx(crossbeam_channel::Sender<ERR>);
 #[derive(Resource, Debug)]
 struct Rx(crossbeam_channel::Receiver<ERR>);
 
-#[derive(Component, Debug, Default)]
+#[derive(Component, Clone, Default, Debug)]
 #[component(immutable)]
 pub struct Method(pub reqwest::Method);
 
@@ -36,7 +36,7 @@ pub const CONNECT: Method = Method(reqwest::Method::CONNECT);
 pub const PATCH: Method = Method(reqwest::Method::PATCH);
 pub const TRACE: Method = Method(reqwest::Method::TRACE);
 
-#[derive(Component, Debug)]
+#[derive(Component, Clone, Debug)]
 #[require(Method)]
 #[component(immutable)]
 pub struct Uri(pub String);
@@ -53,7 +53,7 @@ impl RequestComplete {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Response {
     status: u16,
     body: String,
