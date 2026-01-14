@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_request::{GET, RequestComplete, RequestPlugin, Uri};
+use bevy_request::prelude::*;
 
 fn main() {
     App::new()
