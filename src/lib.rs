@@ -1,5 +1,8 @@
+use std::str::FromStr;
+
 use async_compat::CompatExt;
 use bevy::{prelude::*, tasks::IoTaskPool};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 pub struct RequestPlugin;
 
@@ -11,6 +14,47 @@ impl Plugin for RequestPlugin {
             .insert_resource(Tx(tx))
             .add_observer(request_start)
             .add_systems(Update, request_poll);
+    }
+}
+
+#[derive(Component, Clone, Debug)]
+pub struct Headers(reqwest::header::HeaderMap);
+
+// Header is just a component wrapper around reqwest `HeaderMap`.
+impl Headers {
+    pub fn new() -> Self {
+        Self(HeaderMap::new())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn key_len(&self) -> usize {
+        self.0.keys_len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
+    }
+
+    // TODO: trait
+    pub fn insert(&mut self, key: &str, val: &str) {
+        let key = HeaderName::from_str(key).unwrap();
+        let val = HeaderValue::from_str(val).unwrap();
+        self.0.insert(key, val);
     }
 }
 
@@ -75,23 +119,36 @@ impl Response {
     }
 }
 
-fn request_start(event: On<Add, Method>, query: Query<(&Uri, &Method)>, tx: Res<Tx>) {
+fn request_start(
+    event: On<Add, Method>,
+    query: Query<(&Uri, &Method, Option<&Headers>)>,
+    tx: Res<Tx>,
+) {
     let request_entity = event.entity;
 
-    let Ok((uri, method)) = query.get(request_entity) else {
+    let Ok((uri, method, headers)) = query.get(request_entity) else {
         warn!("missing component in request");
         return;
     };
+
     IoTaskPool::get()
         .spawn({
             let uri = uri.0.clone();
             let method = method.0.clone();
             let tx = tx.0.clone();
+            // PERF: avoid clone
+            let headers = headers.cloned();
 
             async move {
                 let client = reqwest::Client::new();
 
-                let response = client.request(method, uri).send().await;
+                let mut request = client.request(method, uri);
+
+                if let Some(headers) = headers {
+                    request = request.headers(headers.0);
+                }
+
+                let response = request.send().await;
                 let response = Response::from_reqwest(response).await;
                 tx.send((request_entity, response))
                     // TODO: better error handling for
