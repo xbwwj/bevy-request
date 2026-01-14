@@ -37,7 +37,6 @@ pub const PATCH: Method = Method(reqwest::Method::PATCH);
 pub const TRACE: Method = Method(reqwest::Method::TRACE);
 
 #[derive(Component, Clone, Debug)]
-#[require(Method)]
 #[component(immutable)]
 pub struct Uri(pub String);
 
