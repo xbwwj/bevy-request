@@ -1,124 +1,110 @@
-use std::ops::{Deref, DerefMut};
-
-use bevy::{
-    app::{Plugin, Update},
-    ecs::{
-        component::Component,
-        entity::Entity,
-        event::EntityEvent,
-        lifecycle::Add,
-        observer::On,
-        system::{Commands, Query},
-    },
-    tasks::{IoTaskPool, Task, futures::check_ready},
-};
-use blocking::unblock;
-use ureq::http;
+use async_compat::CompatExt;
+use bevy::{prelude::*, tasks::IoTaskPool};
 
 pub struct RequestPlugin;
 
 impl Plugin for RequestPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        app.add_observer(request_start)
+        let (tx, rx) = crossbeam_channel::unbounded();
+
+        app.insert_resource(Rx(rx))
+            .insert_resource(Tx(tx))
+            .add_observer(request_start)
             .add_systems(Update, request_poll);
     }
 }
 
+type ERR = (Entity, reqwest::Result<Response>);
+
+#[derive(Resource, Debug)]
+struct Tx(crossbeam_channel::Sender<ERR>);
+
+#[derive(Resource, Debug)]
+struct Rx(crossbeam_channel::Receiver<ERR>);
+
 #[derive(Component, Debug, Default)]
 #[component(immutable)]
-pub struct Method(pub http::Method);
+pub struct Method(pub reqwest::Method);
 
-pub const GET: Method = Method(http::Method::GET);
-pub const POST: Method = Method(http::Method::POST);
-pub const PUT: Method = Method(http::Method::PUT);
-pub const DELETE: Method = Method(http::Method::DELETE);
-pub const HEAD: Method = Method(http::Method::HEAD);
-pub const OPTIONS: Method = Method(http::Method::OPTIONS);
-pub const CONNECT: Method = Method(http::Method::CONNECT);
-pub const PATCH: Method = Method(http::Method::PATCH);
-pub const TRACE: Method = Method(http::Method::TRACE);
+pub const GET: Method = Method(reqwest::Method::GET);
+pub const POST: Method = Method(reqwest::Method::POST);
+pub const PUT: Method = Method(reqwest::Method::PUT);
+pub const DELETE: Method = Method(reqwest::Method::DELETE);
+pub const HEAD: Method = Method(reqwest::Method::HEAD);
+pub const OPTIONS: Method = Method(reqwest::Method::OPTIONS);
+pub const CONNECT: Method = Method(reqwest::Method::CONNECT);
+pub const PATCH: Method = Method(reqwest::Method::PATCH);
+pub const TRACE: Method = Method(reqwest::Method::TRACE);
 
 #[derive(Component, Debug)]
-#[require(Method, Agent)]
+#[require(Method)]
 #[component(immutable)]
-pub struct Uri(pub http::Uri);
-
-#[derive(Component, Debug)]
-pub struct Agent(pub ureq::Agent);
-
-impl Default for Agent {
-    fn default() -> Self {
-        Self(ureq::agent())
-    }
-}
+pub struct Uri(pub String);
 
 #[derive(EntityEvent, Debug)]
-pub struct Response {
+pub struct RequestComplete {
     entity: Entity,
-    pub result: Result<http::Response<ureq::Body>, ureq::Error>,
+    result: reqwest::Result<Response>,
 }
 
-impl Deref for Response {
-    type Target = Result<http::Response<ureq::Body>, ureq::Error>;
-
-    fn deref(&self) -> &Self::Target {
+impl RequestComplete {
+    pub fn result(&self) -> &reqwest::Result<Response> {
         &self.result
     }
 }
 
-impl DerefMut for Response {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.result
+#[derive(Debug)]
+pub struct Response {
+    status: u16,
+    body: String,
+}
+
+impl Response {
+    async fn from_reqwest(response: reqwest::Result<reqwest::Response>) -> reqwest::Result<Self> {
+        let response = response?;
+        let status = response.status().as_u16();
+        let body = response.text().await?;
+        Ok(Self { status, body })
+    }
+
+    pub fn status(&self) -> u16 {
+        self.status
+    }
+
+    pub fn body(&self) -> &str {
+        &self.body
     }
 }
 
-fn request_start(
-    event: On<Add, Method>,
-    mut commands: Commands,
-    query: Query<(&Uri, &Method, &Agent)>,
-) {
+fn request_start(event: On<Add, Method>, query: Query<(&Uri, &Method)>, tx: Res<Tx>) {
     let request_entity = event.entity;
 
-    if let Ok((uri, method, agent)) = query.get(request_entity) {
-        let pool = IoTaskPool::get();
+    let Ok((uri, method)) = query.get(request_entity) else {
+        warn!("missing component in request");
+        return;
+    };
+    IoTaskPool::get()
+        .spawn({
+            let uri = uri.0.clone();
+            let method = method.0.clone();
+            let tx = tx.0.clone();
 
-        let uri = uri.0.clone();
-        let method = method.0.clone();
-        let agent = agent.0.clone();
+            async move {
+                let client = reqwest::Client::new();
 
-        let task = pool.spawn(async move {
-            unblock(move || {
-                http::Request::builder()
-                    .uri(uri)
-                    .method(method)
-                    .body(())
-                    .map_err(ureq::Error::Http)
-                    .and_then(|request| agent.run(request))
-            })
-            .await
-        });
-
-        commands.spawn(RequestPoll(request_entity, task));
-    } else {
-        println!("false positive");
-    }
+                let response = client.request(method, uri).send().await;
+                let response = Response::from_reqwest(response).await;
+                tx.send((request_entity, response))
+                    // TODO: better error handling for
+                    .expect("fail to send");
+            }
+            .compat()
+        })
+        .detach();
 }
 
-fn request_poll(mut commands: Commands, query: Query<(Entity, &mut RequestPoll)>) {
-    for (poll_entity, mut poll) in query {
-        if let Some(result) = check_ready(&mut poll.1) {
-            commands.trigger(Response {
-                entity: poll.0,
-                result,
-            });
-            commands.entity(poll_entity).despawn();
-        }
+fn request_poll(rx: ResMut<Rx>, mut commands: Commands) {
+    while let Ok((entity, result)) = rx.0.try_recv() {
+        commands.trigger(RequestComplete { entity, result });
     }
 }
-
-#[derive(Component, Debug)]
-struct RequestPoll(
-    /// Entity of request.
-    Entity,
-    Task<Result<http::Response<ureq::Body>, ureq::Error>>,
-);

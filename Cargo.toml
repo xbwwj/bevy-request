@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 async-compat = "0.2.5"
-bevy = { version = "0.17.3", default-features = false }
-blocking = "1.6.2"
+bevy = { version = "0.17.3", default-features = false, features = ["bevy_log"] }
+crossbeam-channel = "0.5.15"
 reqwest = "0.13.1"
-ureq = "3.1.4"

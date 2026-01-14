@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_request::{GET, RequestPlugin, Response, Uri};
+use bevy_request::{GET, RequestComplete, RequestPlugin, Uri};
 
 fn main() {
     App::new()
@@ -10,29 +10,24 @@ fn main() {
 }
 
 fn get_example_com(mut commands: Commands) {
-    let uri = Uri("https://example.com".parse().unwrap());
     commands
-        .spawn((GET, uri))
-        // handle response
+        // spawn a request
+        .spawn((GET, Uri("https://example.com".to_string())))
+        // handle complete event
         .observe(
-            |mut response: On<Response>, mut app_exit: MessageWriter<AppExit>| match &mut response
-                .result
-            {
-                Ok(response) => {
-                    println!("{}", response.status());
-                    // TODO: read_to_string should be background
-                    let text = response.body_mut().read_to_string().unwrap_or_default();
-                    println!("text: {}", text);
-
-                    // successfully exit
-                    app_exit.write(AppExit::Success);
+            |response: On<RequestComplete>, mut app_exit: MessageWriter<AppExit>| {
+                match &response.result() {
+                    Ok(response) => {
+                        println!("status: {}", response.status());
+                        println!("text: {}", response.body());
+                    }
+                    Err(error) => {
+                        eprintln!("{:?}", error);
+                    }
                 }
-                Err(error) => {
-                    eprintln!("{:?}", error);
 
-                    // exit with error
-                    app_exit.write(AppExit::error());
-                }
+                // exit the program when request finish
+                app_exit.write(AppExit::Success);
             },
         );
 }
