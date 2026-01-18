@@ -4,29 +4,31 @@ Bevy native http client.
 
 This library is still in its early stage.
 
+## Example
+
+This is a minimal example which makes a get request to `https://example.com`.
+
 ```rust
 fn get_example_com(mut commands: Commands) {
     commands
-        // spawn a request
-        .spawn((GET, Uri("https://example.com".to_string())))
-        // handle complete event
-        .observe(
-            |response: On<RequestComplete>| {
-                match &response.result() {
-                    Ok(response) => {
-                        println!("status: {}", response.status());
-                        println!("text: {}", response.body());
-                    }
-                    Err(error) => {
-                        eprintln!("{:?}", error);
-                    }
-                }
-            },
-        );
+        // request as components
+        .spawn((
+            GET,
+            Url("https://example.com".to_string()),
+            GetContent::Text,
+        ))
+        // response as entity events
+        .observe(|text: On<ResponseText>| {
+            println!("text:\n{}", text.text);
+        });
 }
-
 ```
 
-## HTTP Backend
+## Features
 
-This library should switch to [nyquest](https://github.com/bdbai/nyquest) when it's mature enough, but in early development we choose to use `reqwest` + `async-compat`.
+- Bevy-ish style using entity, component and entity event
+- Support multiple Formats: bytes, text and (TODO) json
+- Asynchronous content handling
+- TODO: WebAssembly support
+- TODO: platform native http stack
+
