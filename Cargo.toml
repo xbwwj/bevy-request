@@ -1,9 +1,10 @@
 [package]
 name = "bevy_request"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.1"
 edition = "2024"
 description = "A HTTP client library for bevy"
 documentation = "https://docs.rs/bevy-request"
+homepage = "https://github.com/xbwwj/bevy-request"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
