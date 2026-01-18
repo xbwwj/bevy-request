@@ -3,7 +3,7 @@ use std::str::FromStr;
 use bevy::prelude::*;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Default, Debug)]
 pub struct Headers(pub(crate) reqwest::header::HeaderMap);
 
 // Header is just a component wrapper around reqwest `HeaderMap`.

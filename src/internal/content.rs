@@ -8,7 +8,6 @@ use crate::{
 #[derive(Component, Clone, Copy, Debug)]
 pub(crate) struct ContentGotten;
 
-///
 pub(crate) fn get_content(
     query: Query<(&mut ResponseInternal, &GetContent, Entity), Without<ContentGotten>>,
     tx: Res<Tx>,
@@ -18,7 +17,7 @@ pub(crate) fn get_content(
     for (mut response, content, entity) in query {
         if let Some(response) = response.0.take() {
             pool.spawn({
-                let content = content.clone();
+                let content = *content;
                 let tx = tx.clone();
 
                 async move {
