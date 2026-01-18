@@ -3,4 +3,5 @@ pub mod content;
 pub mod events;
 pub mod headers;
 pub mod method;
+pub mod status;
 pub mod url;

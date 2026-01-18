@@ -2,17 +2,16 @@ use async_compat::CompatExt;
 use bevy::{prelude::*, tasks::IoTaskPool};
 
 use crate::{
-    inner::channel::{ResponseEvent, Tx},
     interface::{
         client::{Client, DefaultClient},
-        events::{ResponseError, ResponseReceived, ResponseText},
         headers::Headers,
         method::Method,
         url::Url,
     },
+    internal::channel::Tx,
 };
 
-pub(crate) fn start_requests(
+pub(crate) fn start_request(
     // TODO: which component is the most foundamental one?
     // or use the bundle `or` semantic?
     add: On<Add, Method>,
@@ -53,38 +52,10 @@ pub(crate) fn start_requests(
             }
 
             // await response
-            let response = match request.send().await {
-                Ok(response) => response,
-                Err(error) => {
-                    send_event(&tx, ResponseError { entity, error });
-                    return;
-                }
-            };
-            send_event(
-                &tx,
-                ResponseReceived {
-                    entity,
-                    status: response.status().as_u16(),
-                },
-            );
-
-            // TODO: separate this to another get_content system
-            let text = match response.text().await {
-                Ok(text) => text,
-                Err(error) => {
-                    send_event(&tx, ResponseError { entity, error });
-                    return;
-                }
-            };
-            send_event(&tx, ResponseText { entity, text });
+            let response = request.send().await;
+            tx.send(entity, response);
         }
         .compat()
     })
     .detach();
-}
-
-fn send_event(tx: &Tx, event: impl Into<ResponseEvent>) {
-    if let Err(err) = tx.0.send(event.into()) {
-        error!("fail to send response event to channel, {err:?}");
-    }
 }
