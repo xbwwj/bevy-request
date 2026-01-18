@@ -7,4 +7,7 @@ edition = "2024"
 async-compat = "0.2.5"
 bevy = { version = "0.18.0", default-features = false, features = ["bevy_log"] }
 crossbeam-channel = "0.5.15"
-reqwest = "0.13.1"
+reqwest = { version = "0.13.1", features = ["json"] }
+serde = "1.0.228"
+
+[features]

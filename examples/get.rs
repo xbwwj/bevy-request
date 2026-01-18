@@ -12,32 +12,24 @@ fn main() {
 fn get_example_com(mut commands: Commands) {
     commands
         // spawn a request
-        .spawn((GET, Uri("https://example.com".to_string())))
+        .spawn((
+            GET,
+            Url("https://example.com".to_string()),
+            GetContent::Text,
+        ))
         .observe(|received: On<ResponseReceived>| {
-            match &received.result {
-                Ok(status) => {
-                    println!("status: {}", status);
-                }
-                Err(err) => {
-                    println!("error: {:?}", err);
-                }
-            };
+            println!("status: {}", received.status);
         })
-        // handle complete event
         .observe(
-            |response: On<RequestComplete>, mut app_exit: MessageWriter<AppExit>| {
-                match &response.result() {
-                    Ok(response) => {
-                        println!("status: {}", response.status());
-                        println!("text: {}", response.body());
-                    }
-                    Err(error) => {
-                        eprintln!("error: {:?}", error);
-                    }
-                }
-
-                // exit the program when request finish
+            |text: On<ResponseText>, mut app_exit: MessageWriter<AppExit>| {
+                println!("text:\n{}", text.text);
                 app_exit.write(AppExit::Success);
+            },
+        )
+        .observe(
+            |error: On<ResponseError>, mut app_exit: MessageWriter<AppExit>| {
+                println!("error: {:?}", error.error);
+                app_exit.write(AppExit::error());
             },
         );
 }
